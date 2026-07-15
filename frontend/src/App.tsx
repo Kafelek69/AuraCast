@@ -1,8 +1,18 @@
 import React from 'react';
-import { Outlet, Link } from 'react-router-dom';
+import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { Search, Bell, User, Gamepad2, Code } from 'lucide-react';
+import { useAuthStore } from './store/authStore';
 
 const App: React.FC = () => {
+  // Pobieramy dane użytkownika i funkcję wylogowania ze sklepu
+  const { user, logout } = useAuthStore();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/'); // Po wylogowaniu wracamy na stronę główną
+  };
+
   return (
     <div className="flex flex-col h-screen bg-[#0f0f13] text-gray-100 font-sans overflow-hidden">
       {/* 🔵 NAVBAR */}
@@ -13,16 +23,39 @@ const App: React.FC = () => {
             <span className="text-xl font-bold tracking-tight hidden sm:block group-hover:text-blue-400 transition-colors">AuraCast</span>
           </Link>
         </div>
+        
         <div className="flex-1 max-w-md flex justify-center w-1/3">
           <div className="relative w-full">
             <input type="text" placeholder="Szukaj transmisji..." className="w-full bg-[#27272a] text-sm pl-10 pr-4 py-1.5 rounded-full border border-transparent focus:border-blue-500 outline-none transition-all" />
             <Search className="absolute left-3 top-2 text-gray-400 w-4 h-4" />
           </div>
         </div>
+        
         <div className="flex items-center justify-end space-x-4 w-1/3">
           <Bell className="w-5 h-5 text-gray-300 hover:text-blue-400 cursor-pointer transition-colors" />
-          <User className="w-5 h-5 text-gray-300 hover:text-blue-400 cursor-pointer transition-colors" />
-          <button className="text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-full transition-colors">Streamuj</button>
+          
+          {/* LOGIKA WYŚWIETLANIA PROFILU */}
+          {user ? (
+            <div className="flex items-center space-x-4">
+              <Link to="/dashboard" className="flex items-center gap-2 group cursor-pointer" title="Panel Twórcy">
+                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center font-bold text-sm text-white border-2 border-transparent group-hover:border-blue-400 transition-all uppercase">
+                  {user.username.charAt(0)}
+                </div>
+              </Link>
+              <button onClick={handleLogout} className="text-sm font-bold text-gray-400 hover:text-red-400 transition-colors">
+                Wyloguj
+              </button>
+            </div>
+          ) : (
+            <Link to="/auth" className="flex items-center gap-1 group">
+              <User className="w-5 h-5 text-gray-300 group-hover:text-blue-400 transition-colors" />
+              <span className="text-sm font-bold text-gray-300 group-hover:text-blue-400 transition-colors hidden sm:block">Zaloguj</span>
+            </Link>
+          )}
+
+          <Link to={user ? "/dashboard" : "/auth"} className="text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-full transition-colors flex items-center">
+            Streamuj
+          </Link>
         </div>
       </header>
 

@@ -7,6 +7,7 @@ import pool from './config/db';
 import authRoutes from './routes/authRoutes';
 import channelRoutes from './routes/channelRoutes';
 import { setupChat } from './sockets/chatHandler'; // 🟢 Importujemy nasz czat
+import nms from './rtmp/mediaServer';
 
 dotenv.config();
 
@@ -50,3 +51,5 @@ setupChat(io);
 server.listen(port, () => {
   console.log(`🚀 AuraCast API oraz Live Chat (WebSockets) uruchomione na porcie ${port}`);
 });
+
+nms.run();

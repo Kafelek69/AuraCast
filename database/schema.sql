@@ -1,6 +1,6 @@
 -- Tworzenie bazy danych
-CREATE DATABASE IF NOT EXISTS auracast_dev;
-USE auracast_dev;
+CREATE DATABASE IF NOT EXISTS auracast;
+USE auracast;
 
 -- Tabela Użytkowników (Konta globalne)
 CREATE TABLE users (
