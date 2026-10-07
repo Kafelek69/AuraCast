@@ -34,7 +34,7 @@ Aby odpalić projekt na swoim komputerze, potrzebujesz zainstalowanego Node.js o
 
 ### 1. Klonowanie repozytorium
 ```bash
-git clone https://github.com/twoj-nick/AuraCast.git
+git clone https://github.com/Kafelek69/AuraCast.git
 cd AuraCast
 ```
 
@@ -57,4 +57,4 @@ npm run dev
 
 ## 📜 Licencja
 
-Projekt dystrybuowany na licencji MIT, gwarantującej maksymalną wolność korzystania, modyfikacji i dystrybucji kodu.
+Projekt dystrybuowany na licencji CC BY-NC 4.0 (Attribution-NonCommercial). Licencja ta pozwala na swobodne korzystanie, modyfikację i dystrybucję kodu, jednak wyłącznie do celów niekomercyjnych. Zabrania się wykorzystywania projektu i jego pochodnych do czerpania korzyści majątkowych.
