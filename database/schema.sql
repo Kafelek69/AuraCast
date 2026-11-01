@@ -20,6 +20,8 @@ CREATE TABLE channels (
     display_name VARCHAR(50) NOT NULL UNIQUE,
     bio TEXT,
     avatar_url VARCHAR(255),
+    title VARCHAR(255) DEFAULT 'Transmisja na żywo | AuraCast',
+    offline_banner VARCHAR(255) DEFAULT '',
     stream_key VARCHAR(255) UNIQUE NOT NULL,
     is_live BOOLEAN DEFAULT FALSE,
     current_category VARCHAR(100) DEFAULT 'Just Chatting',

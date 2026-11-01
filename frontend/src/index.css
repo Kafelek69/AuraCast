@@ -1,6 +1,98 @@
 @import "tailwindcss";
 
-body {
-  background-color: #0f0f13;
-  color: white;
+:root {
+  --brand-primary: #3b82f6;
+  --brand-secondary: #0ea5e9;
+  --brand-glow: rgba(59, 130, 246, 0.35);
+  --brand-contrast: #ffffff;
+  --bg-base: #090c10;
+  --bg-card: #11161d;
+  --bg-card-hover: #19202a;
+  --bg-sidebar: #0d1117;
+  --bg-header: #0e1218;
+  --bg-input: #151b23;
+  --border-subtle: #212835;
+  --border-strong: #2e3849;
+  --text-muted: #94a3b8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  background-color: var(--bg-base);
+  color: #f1f5f9;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+/* Custom Esports Styled Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #252e3d;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3b82f6;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.25);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.5);
+}
+
+/* Animations */
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 10px var(--brand-glow);
+  }
+  50% {
+    box-shadow: 0 0 25px var(--brand-glow);
+  }
+}
+
+.animate-brand-glow {
+  animation: pulseGlow 2.5s infinite ease-in-out;
+}
+
+/* Badge style */
+.badge-live {
+  background: #ef4444;
+  color: #ffffff;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.25rem;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.45);
+}
+
+.font-display {
+  font-family: 'Outfit', 'Inter', sans-serif;
 }

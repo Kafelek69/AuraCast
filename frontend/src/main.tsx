@@ -6,6 +6,7 @@ import Home from './pages/Home';
 import Channel from './pages/Channel';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
+import Settings from './pages/Settings';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
@@ -19,6 +20,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
           {/* Sztywne ścieżki (MUSZĄ BYĆ WYŻEJ) */}
           <Route path="auth" element={<Auth />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="settings" element={<Settings />} />
           
           {/* Ścieżka dynamiczna dla kanałów (MUSI BYĆ NA SAMYM DOLE) */}
           <Route path=":channelName" element={<Channel />} />

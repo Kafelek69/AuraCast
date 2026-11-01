@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
 import pool from '../config/db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-tajny-klucz-auracast-zmien-na-produkcji';
@@ -9,17 +10,38 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { username, email, password } = req.body;
 
+    if (!username || !email || !password) {
+      res.status(400).json({ error: 'Wypełnij wszystkie pola formularza.' });
+      return;
+    }
+
     // Szyfrowanie hasła
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Zapis do bazy danych
-    const [result] = await pool.query(
+    // Zapis użytkownika do bazy danych
+    const [result]: any = await pool.query(
       'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)',
       [username, email, passwordHash]
     );
 
-    res.status(201).json({ message: 'Konto zostało pomyślnie utworzone!' });
+    const userId = result.insertId;
+    const streamKey = `live_${uuidv4().replace(/-/g, '')}`;
+
+    // Automatyczne tworzenie powiązanego kanału dla nowego użytkownika
+    await pool.query(
+      'INSERT INTO channels (user_id, display_name, bio, stream_key, current_category, title) VALUES (?, ?, ?, ?, ?, ?)',
+      [
+        userId,
+        username,
+        `Oficjalny kanał ${username} na AuraCast!`,
+        streamKey,
+        'Just Chatting',
+        `Live u ${username}! Zapraszamy na czat`
+      ]
+    );
+
+    res.status(201).json({ message: 'Konto oraz Twój kanał zostały pomyślnie utworzone!' });
   } catch (error: any) {
     if (error.code === 'ER_DUP_ENTRY') {
       res.status(400).json({ error: 'Użytkownik o takiej nazwie lub e-mailu już istnieje.' });

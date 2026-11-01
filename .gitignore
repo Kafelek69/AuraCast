@@ -21,3 +21,7 @@ Thumbs.db
 # Różne logi i cache Vite/Tailwind
 *.log
 .vite/
+
+# Różne pliki i foldery
+start_auracast.bat
+start_auracast.sh

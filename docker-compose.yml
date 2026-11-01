@@ -6,24 +6,60 @@ services:
     container_name: auracast_mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: auracast_dev
-      MYSQL_USER: auracast_user
-      MYSQL_PASSWORD: devpassword
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-auracast_root_secure_password_change_me}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-auracast}
+      MYSQL_USER: ${MYSQL_USER:-auracast_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-auracast_secure_devpassword_123!}
     ports:
-      - "3306:3306"
+      - "${DB_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  redis:
-    image: redis:alpine
-    container_name: auracast_redis
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: auracast_backend
+    restart: always
+    environment:
+      PORT: ${PORT:-4000}
+      NODE_ENV: ${NODE_ENV:-production}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: ${MYSQL_USER:-auracast_user}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-auracast_secure_devpassword_123!}
+      DB_NAME: ${MYSQL_DATABASE:-auracast}
+      JWT_SECRET: ${JWT_SECRET:-auracast_super_secret_jwt_key_please_change_in_production_2026_xyz}
+    ports:
+      - "${PORT:-4000}:4000"       # REST API & WebSockets Chat
+      - "${RTMP_PORT:-1935}:1935"  # RTMP OBS Ingest
+      - "${HTTP_MEDIA_PORT:-8000}:8000" # HTTP-FLV Live Stream
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:4000}
+        VITE_MEDIA_URL: ${VITE_MEDIA_URL:-http://localhost:8000}
+        VITE_WS_URL: ${VITE_WS_URL:-http://localhost:4000}
+    container_name: auracast_frontend
     restart: always
     ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
+      - "${FRONTEND_PORT:-5173}:80"
+      - "80:80"
+    depends_on:
+      - backend
 
 volumes:
   mysql_data:
-  redis_data:
