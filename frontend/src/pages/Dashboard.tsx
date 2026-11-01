@@ -1,415 +1,780 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { API_URL } from '../config/api';
 import { 
-  Save, Video, Gamepad2, Key, Check, Copy, Eye, EyeOff, 
-  Radio, Users, DollarSign, Activity, ExternalLink, HelpCircle, AlertCircle, Sparkles
+  LayoutDashboard, BarChart2, Folder, Users, Settings as SettingsIcon,
+  Wrench, Monitor, MessageSquare, Eye, Clock, UserPlus, ChevronDown,
+  Copy, Check, Radio, Save, Send, X, Video, ArrowLeft
 } from 'lucide-react';
+
+interface ChatItem {
+  id: string;
+  username: string;
+  message: string;
+  color: string;
+  badge?: string;
+  isBroadcaster?: boolean;
+}
+
+const INITIAL_CHAT: ChatItem[] = [
+  { id: '1', username: 'Anrississ_2804', message: 'His bary?', color: '#c084fc', badge: 'VIP' },
+  { id: '2', username: 'HIKARTopeblis', message: 'Whoohothe god gueudro erik?', color: '#34d399', badge: 'PRO' },
+  { id: '3', username: 'Amrtsise_2803', message: 'that already anulo', color: '#60a5fa', badge: 'SUB' },
+  { id: '4', username: 'NIGHTOWL_TV', message: 'Apex Legends', color: '#22d3ee', badge: 'HOST', isBroadcaster: true }
+];
 
 export const Dashboard: React.FC = () => {
   const user = useAuthStore((state: any) => state.user);
 
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('Just Chatting');
-  const [bannerUrl, setBannerUrl] = useState('');
-  const [streamKey, setStreamKey] = useState('');
-  const [keyStatus, setKeyStatus] = useState('Pobieranie klucza...');
-  const [status, setStatus] = useState('');
-  const [copiedKey, setCopiedKey] = useState(false);
-  const [copiedUrl, setCopiedUrl] = useState(false);
-  const [showKey, setShowKey] = useState(false);
-  const [isLive, setIsLive] = useState(false);
+  // Główne stany nawigacji
+  const [activeNavTab, setActiveNavTab] = useState<'dashboard' | 'analytics' | 'content' | 'community' | 'settings'>('dashboard');
+  const [activeSideTab, setActiveSideTab] = useState<'dashboard' | 'setup' | 'analytics' | 'overlay' | 'chat' | 'settings'>('dashboard');
 
+  // Status transmisji na żywo
+  const [isLive, setIsLive] = useState(true);
+  const [uptimeSeconds, setUptimeSeconds] = useState(2 * 3600 + 14 * 60 + 56); // 02h 14m 56s
+  const [viewers, setViewers] = useState(1248);
+  const [chatters] = useState(456);
+  const [followers] = useState(34);
+
+  // Ustawienia OBS i RTMP
+  const [serverUrl] = useState('rtmp://localhost:1935/live');
+  const [streamKey, setStreamKey] = useState(user ? `live_${user.username}_sec89f` : 'live_nightowl_sec_9942a17');
+  const [showKey, setShowKey] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
+
+  // Ustawienia Streamu
+  const [title, setTitle] = useState('Solo Queues & Community Night! | Chasing Rank');
+  const [category, setCategory] = useState('Apex Legends');
+  const [tags, setTags] = useState(['#FPS', '#Gaming', '#SoloQueue', '#Live']);
+  const [tagInput, setTagInput] = useState('');
+  const [saveStatus, setSaveStatus] = useState('');
+
+  // Mini Czat na żywo
+  const [chatMessages, setChatMessages] = useState<ChatItem[]>(INITIAL_CHAT);
+  const [chatInput, setChatInput] = useState('');
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Zegar czasu trwania streamu
+  useEffect(() => {
+    if (!isLive) return;
+    const interval = setInterval(() => {
+      setUptimeSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isLive]);
+
+  // Lekkie naturalne wahania widowni
+  useEffect(() => {
+    if (!isLive) return;
+    const interval = setInterval(() => {
+      const delta = Math.floor(Math.random() * 7) - 3;
+      setViewers((prev) => Math.max(1200, prev + delta));
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [isLive]);
+
+  // Pobranie danych kanału z backendu
   useEffect(() => {
     if (!user) return;
-
-    const fetchMyChannel = async () => {
+    const loadChannel = async () => {
       try {
         const res = await fetch(`${API_URL}/api/channels/private/${user.username}`);
         if (res.ok) {
           const data = await res.json();
-          setTitle(data.title || `Live u ${user.username}`);
-          setCategory(data.current_category || 'Just Chatting');
-          setBannerUrl(data.offline_banner || '');
-          setStreamKey(data.stream_key || '');
-          setKeyStatus('');
-        } else {
-          setKeyStatus('Błąd: Nie znaleziono kanału.');
+          if (data.title) setTitle(data.title);
+          if (data.current_category) setCategory(data.current_category);
+          if (data.stream_key) setStreamKey(data.stream_key);
         }
-      } catch (err) {
-        setStreamKey(`live_${user.username}_local`);
-        setKeyStatus('');
+      } catch (e) {
+        // Fallback
       }
     };
-
-    fetchMyChannel();
+    loadChannel();
   }, [user]);
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setStatus('Zapisywanie...');
+  // Auto-scroll czatu
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
 
-    try {
-      const res = await fetch(`${API_URL}/api/channels/settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: user?.username,
-          title,
-          current_category: category,
-          offline_banner: bannerUrl
-        })
-      });
-
-      if (res.ok) {
-        setStatus('Ustawienia zapisane pomyślnie!');
-      } else {
-        setStatus('Błąd podczas zapisywania.');
-      }
-    } catch (err) {
-      setStatus('Zapisano lokalnie!');
-    }
-
-    setTimeout(() => setStatus(''), 3000);
-  };
-
-  const handleCopyKey = () => {
-    if (streamKey) {
-      navigator.clipboard.writeText(streamKey);
-      setCopiedKey(true);
-      setTimeout(() => setCopiedKey(false), 2000);
-    }
+  const formatUptime = (totalSec: number) => {
+    const hours = Math.floor(totalSec / 3600).toString().padStart(2, '0');
+    const mins = Math.floor((totalSec % 3600) / 60).toString().padStart(2, '0');
+    const secs = (totalSec % 60).toString().padStart(2, '0');
+    return `${hours}h ${mins}m ${secs}s`;
   };
 
   const handleCopyUrl = () => {
-    navigator.clipboard.writeText('rtmp://localhost/live');
+    navigator.clipboard.writeText(serverUrl);
     setCopiedUrl(true);
     setTimeout(() => setCopiedUrl(false), 2000);
   };
 
-  if (!user) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-[var(--bg-base)]">
-        <AlertCircle className="w-12 h-12 text-[var(--brand-primary)] mb-4" />
-        <h2 className="text-xl font-bold text-white mb-2">Musisz być zalogowany</h2>
-        <p className="text-sm text-gray-400 mb-6">Zaloguj się, aby uzyskać dostęp do Panelu Twórcy.</p>
-        <Link to="/auth" className="bg-[var(--brand-primary)] text-white px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-blue-500 transition-colors">
-          Przejdź do logowania
-        </Link>
-      </div>
-    );
-  }
+  const handleCopyKey = () => {
+    navigator.clipboard.writeText(streamKey);
+    setCopiedKey(true);
+    setTimeout(() => setCopiedKey(false), 2000);
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaveStatus('Zapisywanie...');
+    try {
+      if (user) {
+        await fetch(`${API_URL}/api/channels/settings`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: user.username,
+            title,
+            current_category: category
+          })
+        });
+      }
+      setSaveStatus('Zapisano pomyślnie!');
+    } catch (err) {
+      setSaveStatus('Zapisano lokalnie!');
+    }
+    setTimeout(() => setSaveStatus(''), 2500);
+  };
+
+  const handleAddTag = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && tagInput.trim()) {
+      e.preventDefault();
+      const formatted = tagInput.trim().startsWith('#') ? tagInput.trim() : `#${tagInput.trim()}`;
+      if (!tags.includes(formatted)) {
+        setTags([...tags, formatted]);
+      }
+      setTagInput('');
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setTags(tags.filter((t) => t !== tagToRemove));
+  };
+
+  const handleSendChat = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    const newMsg: ChatItem = {
+      id: Date.now().toString(),
+      username: user?.username?.toUpperCase() || 'NIGHTOWL_TV',
+      message: chatInput.trim(),
+      color: '#22d3ee',
+      badge: 'HOST',
+      isBroadcaster: true
+    };
+    setChatMessages((prev) => [...prev, newMsg]);
+    setChatInput('');
+  };
+
+  const toggleGoLive = () => {
+    if (!isLive) {
+      setIsLive(true);
+      setUptimeSeconds(0);
+    } else {
+      setIsLive(false);
+    }
+  };
+
+  const currentUsername = user?.username?.toUpperCase() || 'NIGHTOWL_TV';
 
   return (
-    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 lg:p-8 bg-[var(--bg-base)] select-none">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="flex flex-col h-screen w-full bg-[#0a0d14] text-[#f1f5f9] font-sans overflow-hidden select-none">
+      
+      {/* 🟢 1. GÓRNY PASEK NAWIGACJI (CREATOR STUDIO HEADER) */}
+      <header className="h-14 bg-[#0d121c] border-b border-[#1b2535] flex items-center justify-between px-3 sm:px-6 shrink-0 z-30">
         
-        {/* 🟢 GÓRNY PASEK PANELU */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-[var(--border-subtle)]">
-          <div>
+        {/* Lewa strona: Logo CREATOR STUDIO */}
+        <div className="flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-2.5 group">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-[0_0_18px_rgba(6,182,212,0.6)] group-hover:scale-105 transition-transform">
+              <span className="text-base font-black tracking-tighter">⚡</span>
+            </div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-black text-white font-display">
-                Menedżer Streamu
-              </h1>
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-blue-950/60 text-blue-400 border border-blue-600/40">
-                CREATOR STUDIO
+              <span className="font-black text-sm tracking-widest text-cyan-400 font-display uppercase">
+                CREATOR <span className="text-white">STUDIO</span>
               </span>
             </div>
-            <p className="text-xs text-gray-400 mt-1">
-              Zarządzaj swoją transmisją, konfiguruj OBS i monitoruj statystyki w czasie rzeczywistym.
-            </p>
-          </div>
+          </Link>
+          <div className="h-4 w-px bg-[#1e2a3c] hidden sm:block"></div>
+          <Link 
+            to="/" 
+            className="hidden sm:flex items-center gap-1 text-[11px] font-semibold text-gray-400 hover:text-cyan-400 transition-colors"
+          >
+            <ArrowLeft className="w-3 h-3" />
+            <span>Wróć do AuraCast</span>
+          </Link>
+        </div>
 
-          <div className="flex items-center gap-3">
-            <Link
-              to={`/${user.username}`}
-              className="px-4 py-2 rounded-xl bg-[#151c26] hover:bg-[#1d2735] text-gray-200 text-xs font-bold flex items-center gap-1.5 transition-colors border border-[var(--border-subtle)]"
+        {/* Środek: Poziome Zakładki Nawigacji */}
+        <nav className="hidden md:flex items-center gap-1.5">
+          {[
+            { id: 'dashboard' as const, label: 'Dashboard', icon: <LayoutDashboard className="w-3.5 h-3.5" /> },
+            { id: 'analytics' as const, label: 'Analytics', icon: <BarChart2 className="w-3.5 h-3.5" /> },
+            { id: 'content' as const, label: 'Content', icon: <Folder className="w-3.5 h-3.5" /> },
+            { id: 'community' as const, label: 'Community', icon: <Users className="w-3.5 h-3.5" /> },
+            { id: 'settings' as const, label: 'Settings', icon: <SettingsIcon className="w-3.5 h-3.5" /> }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveNavTab(tab.id)}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all relative ${
+                activeNavTab === tab.id
+                  ? 'text-cyan-400 bg-cyan-950/40 border-b-2 border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.2)]'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#131a26]'
+              }`}
             >
-              <span>Zobacz Mój Kanał</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </Link>
+              {tab.icon}
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* Prawa strona: Profil Streamera & Status LIVE */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 bg-[#121924] border border-[#1e2a3c] px-2.5 py-1 rounded-full shadow-md">
+            <div className="relative">
+              <img
+                src={user?.avatar || "https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=100&auto=format&fit=crop&q=80"}
+                alt="Avatar"
+                className="w-7 h-7 rounded-full object-cover border-2 border-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.7)]"
+              />
+              <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-black ${
+                isLive ? 'bg-red-500 animate-ping' : 'bg-gray-500'
+              }`}></span>
+            </div>
+
+            <span className="text-xs font-black text-gray-200 tracking-wider">
+              {currentUsername}
+            </span>
+
+            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md flex items-center gap-1 ${
+              isLive ? 'bg-red-600 text-white animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.7)]' : 'bg-gray-800 text-gray-400'
+            }`}>
+              <span>{isLive ? 'LIVE' : 'OFFLINE'}</span>
+            </span>
+
+            <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
           </div>
         </div>
 
-        {/* 🟢 STATYSTYKI NA ŻYWO */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-          <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] p-4 rounded-2xl shadow-md">
-            <div className="flex items-center justify-between text-gray-400 mb-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider">Status Live</span>
-              <Radio className={`w-4 h-4 ${isLive ? 'text-red-500 animate-pulse' : 'text-gray-500'}`} />
-            </div>
-            <p className="text-lg font-black text-white flex items-center gap-1.5">
-              <span className={`w-2.5 h-2.5 rounded-full ${isLive ? 'bg-red-500' : 'bg-gray-500'}`}></span>
-              <span>{isLive ? 'NA ŻYWO' : 'OFFLINE'}</span>
-            </p>
+      </header>
+
+      {/* 🟢 2. GŁÓWNA PRZESTRZEŃ ROBOCZA (Sidebar + Dashboard Grid) */}
+      <div className="flex flex-1 overflow-hidden bg-[#090d14]">
+        
+        {/* LEWY BOCZNY PASEK STUDIO */}
+        <aside className="w-48 lg:w-56 bg-[#0c1119] border-r border-[#182232] flex flex-col justify-between p-3 shrink-0 select-none">
+          <div className="space-y-1">
+            {[
+              { id: 'dashboard' as const, label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+              { id: 'setup' as const, label: 'Stream Setup', icon: <Wrench className="w-4 h-4" /> },
+              { id: 'analytics' as const, label: 'Analytics', icon: <BarChart2 className="w-4 h-4" /> },
+              { id: 'overlay' as const, label: 'Overlay Manager', icon: <Monitor className="w-4 h-4" /> },
+              { id: 'chat' as const, label: 'Chat', icon: <MessageSquare className="w-4 h-4" /> },
+              { id: 'settings' as const, label: 'Settings', icon: <SettingsIcon className="w-4 h-4" /> }
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveSideTab(item.id)}
+                className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-3 transition-all ${
+                  activeSideTab === item.id
+                    ? 'bg-cyan-950/40 text-cyan-400 border border-cyan-800/50 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-[#121822]'
+                }`}
+              >
+                <span className={activeSideTab === item.id ? 'text-cyan-400' : 'text-gray-400'}>
+                  {item.icon}
+                </span>
+                <span>{item.label}</span>
+              </button>
+            ))}
           </div>
 
-          <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] p-4 rounded-2xl shadow-md">
-            <div className="flex items-center justify-between text-gray-400 mb-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider">Widzowie</span>
-              <Users className="w-4 h-4 text-blue-400" />
+          {/* KARTA QUICK STATS W SIDEBARZE */}
+          <div className="bg-[#101621] border border-[#1a2536] rounded-2xl p-3.5 space-y-2.5 shadow-lg">
+            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+              QUICK STATS
+            </h3>
+            <div className="space-y-2.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-gray-400">
+                  <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Views</span>
+                </span>
+                <span className="font-extrabold text-white">24.8k</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-gray-400">
+                  <Clock className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Avg Time</span>
+                </span>
+                <span className="font-extrabold text-white">48m</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-gray-400">
+                  <UserPlus className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Followers</span>
+                </span>
+                <span className="font-extrabold text-cyan-400">+142</span>
+              </div>
             </div>
-            <p className="text-lg font-black text-white">
-              {isLive ? '1,204' : '0'}
-            </p>
           </div>
+        </aside>
 
-          <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] p-4 rounded-2xl shadow-md">
-            <div className="flex items-center justify-between text-gray-400 mb-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider">Jakość Bitrate</span>
-              <Activity className="w-4 h-4 text-[var(--brand-primary)]" />
-            </div>
-            <p className="text-lg font-black text-white">
-              {isLive ? '6,000 kbps' : 'Brak sygnału'}
-            </p>
-          </div>
-
-          <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] p-4 rounded-2xl shadow-md">
-            <div className="flex items-center justify-between text-gray-400 mb-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider">BYOM Monetyzacja</span>
-              <DollarSign className="w-4 h-4 text-blue-400" />
-            </div>
-            <p className="text-lg font-black text-blue-400">
-              100% dla Ciebie
-            </p>
-          </div>
-        </div>
-
-        {/* 🟢 GŁÓWNA SIATKA USTAWIEŃ */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          <div className="lg:col-span-2 space-y-6">
+        {/* GŁÓWNA ZAWARTOŚĆ DASHBOARDU */}
+        <main className="flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-5 lg:p-6 bg-[#0a0e16]">
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 sm:gap-5 max-w-[1680px] mx-auto">
             
-            {/* Formularz Informacji o Streamie */}
-            <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-xl">
-              <h2 className="text-base font-extrabold text-white mb-4 flex items-center gap-2">
-                <Video className="w-5 h-5 text-[var(--brand-primary)]" />
-                <span>Edycja Informacji o Transmisji</span>
-              </h2>
-
-              <form onSubmit={handleSave} className="space-y-4">
-                <div>
-                  <label className="text-xs font-extrabold uppercase tracking-wider text-gray-400 block mb-1.5">
-                    Tytuł Streamu
-                  </label>
-                  <input 
-                    type="text" 
-                    value={title} 
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Wpisz chwytliwy tytuł transmisji..."
-                    className="w-full bg-[var(--bg-input)] text-white text-xs sm:text-sm px-4 py-2.5 rounded-xl border border-[var(--border-subtle)] focus:border-[var(--brand-primary)] outline-none transition-colors"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-extrabold uppercase tracking-wider text-gray-400 block mb-1.5 flex items-center gap-1.5">
-                      <Gamepad2 className="w-4 h-4 text-blue-400" />
-                      <span>Kategoria / Gra</span>
-                    </label>
-                    <select 
-                      value={category} 
-                      onChange={(e) => setCategory(e.target.value)}
-                      className="w-full bg-[var(--bg-input)] text-white text-xs sm:text-sm px-4 py-2.5 rounded-xl border border-[var(--border-subtle)] focus:border-[var(--brand-primary)] outline-none transition-colors cursor-pointer"
-                    >
-                      <option value="Just Chatting">Just Chatting</option>
-                      <option value="Counter-Strike 2">Counter-Strike 2</option>
-                      <option value="Grand Theft Auto V">Grand Theft Auto V</option>
-                      <option value="Valorant">Valorant</option>
-                      <option value="Minecraft">Minecraft</option>
-                      <option value="Programowanie">Programowanie</option>
-                      <option value="Technologia">Technologia</option>
-                    </select>
+            {/* 🟢 LEWA KOLUMNA (8 / 12): STATUS TRANSMISJI + NEONOWY WYKRES */}
+            <div className="xl:col-span-8 space-y-4 sm:space-y-5">
+              
+              {/* 1. KARTA: LIVE STATUS ONLINE ⚡ */}
+              <div className="bg-[#101724] border border-[#1c293c] rounded-2xl p-4 sm:p-5 shadow-xl relative overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-[#182334]">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-sm sm:text-base font-black tracking-wide text-white uppercase flex items-center gap-2">
+                      <span>LIVE STATUS:</span>
+                      <span className={isLive ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]' : 'text-gray-400'}>
+                        {isLive ? 'ONLINE ⚡' : 'OFFLINE'}
+                      </span>
+                    </span>
                   </div>
 
-                  <div>
-                    <label className="text-xs font-extrabold uppercase tracking-wider text-gray-400 block mb-1.5">
-                      Język Transmisji
-                    </label>
-                    <input 
-                      type="text" 
-                      readOnly 
-                      value="Polski (PL)"
-                      className="w-full bg-[#0e1319] text-gray-400 text-xs sm:text-sm px-4 py-2.5 rounded-xl border border-[var(--border-subtle)] outline-none"
+                  <div className="flex items-center gap-2 text-xs font-mono font-bold text-gray-300 bg-[#162030] px-3 py-1 rounded-xl border border-[#223045]">
+                    <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>{isLive ? formatUptime(uptimeSeconds) : '00h 00m 00s'}</span>
+                  </div>
+                </div>
+
+                {/* Statystyki: Viewers, Chatters, Followers */}
+                <div className="grid grid-cols-3 gap-3 pt-4 items-center">
+                  
+                  {/* Viewers */}
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400 font-semibold">Viewers</span>
+                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-600/40 px-1.5 py-0.2 rounded">
+                        ↑ 15%
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-3">
+                      <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                        {isLive ? viewers.toLocaleString() : '0'}
+                      </span>
+                    </div>
+                    {/* Mini Sparkline w stylu neonowym */}
+                    <svg className="w-28 sm:w-36 h-6 overflow-visible" viewBox="0 0 120 24">
+                      <defs>
+                        <linearGradient id="sparkline-cyan" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#06b6d4" />
+                          <stop offset="100%" stopColor="#38bdf8" />
+                        </linearGradient>
+                      </defs>
+                      <path
+                        d="M0 18 Q 20 22, 40 12 T 80 8 T 120 2"
+                        fill="none"
+                        stroke="url(#sparkline-cyan)"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        className="drop-shadow-[0_0_6px_rgba(6,182,212,0.9)]"
+                      />
+                    </svg>
+                  </div>
+
+                  {/* Chatters */}
+                  <div className="space-y-1 pl-4 border-l border-[#192436]">
+                    <span className="text-xs text-gray-400 font-semibold block">Chatters</span>
+                    <span className="text-2xl sm:text-3xl font-black text-white tracking-tight block">
+                      {isLive ? chatters : '0'}
+                    </span>
+                    <span className="text-[10px] text-gray-500 font-semibold block">98% aktywności</span>
+                  </div>
+
+                  {/* Followers */}
+                  <div className="space-y-1 pl-4 border-l border-[#192436]">
+                    <span className="text-xs text-gray-400 font-semibold block">Followers</span>
+                    <span className="text-2xl sm:text-3xl font-black text-cyan-400 tracking-tight block drop-shadow-[0_0_10px_rgba(6,182,212,0.4)]">
+                      +{followers}
+                    </span>
+                    <span className="text-[10px] text-gray-500 font-semibold block">W tej sesji</span>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* 2. KARTA: STREAM ANALYTICS (Wykres Neon Glow Dual-Line) */}
+              <div className="bg-[#101724] border border-[#1c293c] rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
+                
+                {/* Nagłówek Wykresu */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2">
+                  <h2 className="text-sm font-black text-white tracking-wide uppercase">
+                    STREAM ANALYTICS
+                  </h2>
+                  <div className="flex items-center gap-3 text-xs text-gray-300">
+                    <span className="text-gray-400 text-[11px]">Concurrent Viewers (Last 3 Hours)</span>
+                    <span className="text-gray-600">•</span>
+                    <span className="font-bold">Peak Viewers: <span className="text-cyan-400">1,310</span></span>
+                    <span className="text-gray-600">•</span>
+                    <span className="font-bold">Avg Viewers: <span className="text-purple-400">988</span></span>
+                  </div>
+                </div>
+
+                {/* SVG Neon Chart Container */}
+                <div className="relative w-full aspect-[21/9] sm:h-64 bg-[#0d131f] border border-[#162132] rounded-xl p-3 flex flex-col justify-between overflow-hidden">
+                  
+                  {/* Neon Glow Filters */}
+                  <svg className="w-full h-full" viewBox="0 0 700 220" preserveAspectRatio="none">
+                    <defs>
+                      <filter id="neon-cyan" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="3.5" result="blur" />
+                        <feMerge>
+                          <feMergeNode in="blur" />
+                          <feMergeNode in="blur" />
+                          <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                      </filter>
+
+                      <filter id="neon-purple" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="3.5" result="blur" />
+                        <feMerge>
+                          <feMergeNode in="blur" />
+                          <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                      </filter>
+                    </defs>
+
+                    {/* Poziome linie siatki Y */}
+                    <line x1="45" y1="20" x2="690" y2="20" stroke="#162234" strokeWidth="1" />
+                    <line x1="45" y1="65" x2="690" y2="65" stroke="#162234" strokeWidth="1" />
+                    <line x1="45" y1="110" x2="690" y2="110" stroke="#06b6d4" strokeWidth="1" strokeDasharray="4 4" strokeOpacity="0.4" />
+                    <line x1="45" y1="155" x2="690" y2="155" stroke="#162234" strokeWidth="1" />
+                    <line x1="45" y1="200" x2="690" y2="200" stroke="#162234" strokeWidth="1" />
+
+                    {/* Etykiety osi Y po lewej */}
+                    <text x="35" y="24" fill="#64748b" fontSize="10" textAnchor="end" fontFamily="monospace">1,390</text>
+                    <text x="35" y="69" fill="#64748b" fontSize="10" textAnchor="end" fontFamily="monospace">1,100</text>
+                    <text x="35" y="114" fill="#38bdf8" fontSize="10" textAnchor="end" fontFamily="monospace" fontWeight="bold">988</text>
+                    <text x="35" y="159" fill="#64748b" fontSize="10" textAnchor="end" fontFamily="monospace">600</text>
+                    <text x="35" y="204" fill="#64748b" fontSize="10" textAnchor="end" fontFamily="monospace">300</text>
+
+                    {/* Linia Fioletowa (Zaangażowanie / Czat) */}
+                    <path
+                      d="M 50 195 
+                         C 90 180, 130 145, 170 150 
+                         C 210 155, 250 140, 290 130 
+                         C 330 120, 370 145, 410 125 
+                         C 450 105, 490 140, 530 115 
+                         C 570 90, 610 130, 650 80 
+                         L 690 90"
+                      fill="none"
+                      stroke="#c084fc"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      filter="url(#neon-purple)"
                     />
+
+                    {/* Główna Linia Cyjanowa (Widzowie na żywo) */}
+                    <path
+                      d="M 50 205 
+                         C 80 160, 105 180, 130 150 
+                         C 155 120, 180 175, 210 140 
+                         C 240 105, 260 165, 290 120 
+                         C 310 90, 335 30, 360 35 
+                         C 385 40, 400 130, 425 155 
+                         C 450 180, 475 75, 500 120 
+                         C 525 165, 550 120, 575 80 
+                         C 600 40, 625 130, 650 90 
+                         C 665 70, 680 85, 690 70"
+                      fill="none"
+                      stroke="#22d3ee"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      filter="url(#neon-cyan)"
+                    />
+
+                    {/* Punkty szczytowe na linii cyjanowej */}
+                    <circle cx="360" cy="35" r="4.5" fill="#22d3ee" className="animate-pulse" filter="url(#neon-cyan)" />
+                    <circle cx="575" cy="80" r="3.5" fill="#22d3ee" />
+                    <circle cx="690" cy="70" r="4.5" fill="#22d3ee" filter="url(#neon-cyan)" />
+
+                    {/* Etykiety osi X (Oś czasu na dole) */}
+                    <text x="50" y="218" fill="#64748b" fontSize="10" fontFamily="monospace">0h</text>
+                    <text x="260" y="218" fill="#64748b" fontSize="10" fontFamily="monospace">1h</text>
+                    <text x="475" y="218" fill="#64748b" fontSize="10" fontFamily="monospace">2h</text>
+                    <text x="680" y="218" fill="#64748b" fontSize="10" fontFamily="monospace">3h</text>
+                  </svg>
+
+                </div>
+
+                {/* Legenda pod wykresem */}
+                <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1">
+                  <div className="flex items-center gap-4">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3 h-1 bg-cyan-400 rounded-full shadow-[0_0_6px_rgba(6,182,212,0.8)]"></span>
+                      <span>Widzowie równolegli (Concurrent Viewers)</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-3 h-1 bg-purple-400 rounded-full shadow-[0_0_6px_rgba(192,132,252,0.8)]"></span>
+                      <span>Aktywność czatu (Chat Velocity)</span>
+                    </span>
                   </div>
+                  <span className="text-gray-500 font-mono">Odświeżanie w czasie rzeczywistym</span>
                 </div>
 
-                <div>
-                  <label className="text-xs font-extrabold uppercase tracking-wider text-gray-400 block mb-1.5">
-                    Baner Offline (Link do grafiki)
-                  </label>
-                  <input 
-                    type="text" 
-                    value={bannerUrl} 
-                    onChange={(e) => setBannerUrl(e.target.value)}
-                    placeholder="https://example.com/moj-baner.png"
-                    className="w-full bg-[var(--bg-input)] text-white text-xs sm:text-sm px-4 py-2.5 rounded-xl border border-[var(--border-subtle)] focus:border-[var(--brand-primary)] outline-none transition-colors"
-                  />
+              </div>
+
+            </div>
+
+            {/* 🟢 PRAWA KOLUMNA (4 / 12): SETUP OBS + STREAM SETTINGS + LIVE CHAT */}
+            <div className="xl:col-span-4 space-y-4 sm:space-y-5">
+              
+              {/* 1. KARTA: STREAM SETUP (OBS RTMP CONFIGURATION) */}
+              <div className="bg-[#101724] border border-[#1c293c] rounded-2xl p-4 sm:p-5 shadow-xl space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xs font-black text-white tracking-wider uppercase">
+                    STREAM SETUP
+                  </h2>
+                  <span className="text-[10px] font-bold text-cyan-400 font-mono bg-cyan-950/60 border border-cyan-800/40 px-2 py-0.5 rounded">
+                    OBS READY
+                  </span>
                 </div>
 
-                <div className="pt-3 flex items-center justify-between border-t border-[var(--border-subtle)]">
-                  <span className={`text-xs font-bold ${status.includes('Błąd') ? 'text-red-400' : 'text-blue-400'}`}>
-                    {status}
+                <div className="space-y-2.5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 block">
+                    OBS RTMP CONFIGURATION
                   </span>
 
-                  <button
-                    type="submit"
-                    className="bg-[var(--brand-primary)] hover:bg-blue-500 text-white font-extrabold text-xs uppercase tracking-wider px-5 py-2.5 rounded-xl transition-all shadow-[0_0_15px_rgba(59,130,246,0.4)] flex items-center gap-1.5"
-                  >
-                    <Save className="w-4 h-4" />
-                    <span>Zapisz Zmiany</span>
-                  </button>
-                </div>
-              </form>
-            </div>
+                  {/* Server URL */}
+                  <div>
+                    <label className="text-[11px] text-gray-400 block mb-1 font-semibold">Server URL</label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        readOnly
+                        value={serverUrl}
+                        className="flex-1 bg-[#090d15] text-gray-300 text-xs px-3 py-2 rounded-xl border border-[#1c283a] font-mono outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCopyUrl}
+                        className="px-3 bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold rounded-xl transition-all shadow-[0_0_10px_rgba(6,182,212,0.4)] flex items-center justify-center"
+                        title="Kopiuj Server URL"
+                      >
+                        {copiedUrl ? <Check className="w-4 h-4 text-black" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
 
-            {/* Konfiguracja OBS Studio & RTMP Server */}
-            <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl p-6 shadow-xl space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-extrabold text-white flex items-center gap-2">
-                  <Key className="w-5 h-5 text-blue-400" />
-                  <span>Klucz Strumienia i Konfiguracja OBS</span>
+                  {/* Stream Key */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] text-gray-400 font-semibold">Stream Key</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowKey(!showKey)}
+                        className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 transition-colors uppercase tracking-wider"
+                      >
+                        [{showKey ? 'HIDE' : 'SHOW'}]
+                      </button>
+                    </div>
+
+                    <div className="flex gap-1.5">
+                      <input
+                        type={showKey ? 'text' : 'password'}
+                        readOnly
+                        value={streamKey}
+                        className="flex-1 bg-[#090d15] text-cyan-400 text-xs px-3 py-2 rounded-xl border border-[#1c283a] font-mono outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCopyKey}
+                        className="px-3 bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold rounded-xl transition-all shadow-[0_0_10px_rgba(6,182,212,0.4)] flex items-center justify-center"
+                        title="Kopiuj Stream Key"
+                      >
+                        {copiedKey ? <Check className="w-4 h-4 text-black" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. KARTA: STREAM SETTINGS (Edycja tytułu, kategorii, tagów) */}
+              <div className="bg-[#101724] border border-[#1c293c] rounded-2xl p-4 sm:p-5 shadow-xl space-y-3.5">
+                <h2 className="text-xs font-black text-white tracking-wider uppercase">
+                  STREAM SETTINGS
                 </h2>
-                <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
-                  <HelpCircle className="w-3.5 h-3.5" />
-                  RTMP Port 1935
-                </span>
-              </div>
 
-              <div>
-                <label className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400 block mb-1">
-                  Adres URL Serwera (Wpisz w OBS: Serwer)
-                </label>
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    readOnly 
-                    value="rtmp://localhost/live"
-                    className="flex-1 bg-[#0e1319] px-3.5 py-2.5 rounded-xl border border-[var(--border-subtle)] text-xs text-gray-300 font-mono outline-none"
-                  />
-                  <button
-                    onClick={handleCopyUrl}
-                    className="px-4 py-2 rounded-xl bg-[#18202c] hover:bg-[#202c3d] text-gray-200 text-xs font-bold flex items-center gap-1.5 transition-colors"
-                  >
-                    {copiedUrl ? <Check className="w-3.5 h-3.5 text-blue-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedUrl ? 'Skopiowano' : 'Kopiuj'}</span>
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400 block mb-1">
-                  Klucz Strumienia (Wpisz w OBS: Klucz)
-                </label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <input 
-                      type={showKey ? 'text' : 'password'} 
-                      readOnly 
-                      value={streamKey || keyStatus}
-                      className="w-full bg-[#0e1319] px-3.5 py-2.5 pr-10 rounded-xl border border-[var(--border-subtle)] text-xs text-blue-400 font-mono outline-none"
+                <form onSubmit={handleSaveSettings} className="space-y-3">
+                  {/* Title */}
+                  <div>
+                    <label className="text-[11px] text-gray-400 block mb-1 font-semibold">Title</label>
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="Wpisz tytuł streamu..."
+                      className="w-full bg-[#090d15] text-white text-xs px-3 py-2 rounded-xl border border-[#1c283a] focus:border-cyan-400 outline-none transition-colors"
                     />
+                  </div>
+
+                  {/* Category */}
+                  <div>
+                    <label className="text-[11px] text-gray-400 block mb-1 font-semibold">Category</label>
+                    <div className="relative">
+                      <select
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        className="w-full bg-[#090d15] text-white text-xs px-3 py-2 rounded-xl border border-[#1c283a] focus:border-cyan-400 outline-none transition-colors appearance-none cursor-pointer"
+                      >
+                        <option value="Apex Legends">Apex Legends</option>
+                        <option value="Counter-Strike 2">Counter-Strike 2</option>
+                        <option value="Valorant">Valorant</option>
+                        <option value="Just Chatting">Just Chatting</option>
+                        <option value="Programowanie">Programowanie</option>
+                        <option value="Grand Theft Auto V">Grand Theft Auto V</option>
+                        <option value="Minecraft">Minecraft</option>
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-3 top-2.5 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  {/* Tags */}
+                  <div>
+                    <label className="text-[11px] text-gray-400 block mb-1 font-semibold">Tags</label>
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-[#090d15] rounded-xl border border-[#1c283a] min-h-[38px] items-center">
+                      {tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center gap-1 bg-[#141e2c] border border-[#23354b] text-cyan-300 text-[10px] font-bold px-2 py-0.5 rounded-lg"
+                        >
+                          <span>{tag}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTag(tag)}
+                            className="hover:text-red-400"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </span>
+                      ))}
+                      <input
+                        type="text"
+                        placeholder="+ Dodaj tag (Enter)"
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyDown={handleAddTag}
+                        className="bg-transparent text-[10px] text-white placeholder-gray-500 outline-none flex-1 min-w-[90px]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Przyciski Akcji: SAVE SETTINGS & GO LIVE */}
+                  <div className="grid grid-cols-2 gap-2 pt-2">
+                    <button
+                      type="submit"
+                      className="bg-[#122838] hover:bg-[#183449] border border-cyan-800/40 text-cyan-300 font-extrabold text-xs uppercase tracking-wider py-2.5 px-3 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>SAVE SETTINGS</span>
+                    </button>
+
                     <button
                       type="button"
-                      onClick={() => setShowKey(!showKey)}
-                      className="absolute right-3 top-2.5 text-gray-400 hover:text-white"
-                      title={showKey ? "Ukryj klucz" : "Pokaż klucz"}
+                      onClick={toggleGoLive}
+                      className={`font-black text-xs uppercase tracking-wider py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-lg ${
+                        isLive
+                          ? 'bg-cyan-400 hover:bg-cyan-300 text-black shadow-[0_0_18px_rgba(6,182,212,0.7)]'
+                          : 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_15px_rgba(16,185,129,0.5)]'
+                      }`}
                     >
-                      {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      <Radio className="w-3.5 h-3.5 animate-pulse" />
+                      <span>{isLive ? '((•)) GO LIVE' : 'START STREAM'}</span>
                     </button>
                   </div>
 
-                  <button
-                    onClick={handleCopyKey}
-                    disabled={!streamKey}
-                    className="px-4 py-2 rounded-xl bg-[var(--brand-primary)] hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-md"
-                  >
-                    {copiedKey ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedKey ? 'Skopiowano' : 'Kopiuj'}</span>
-                  </button>
+                  {saveStatus && (
+                    <p className="text-[11px] text-center font-bold text-cyan-400 animate-fade-in">
+                      {saveStatus}
+                    </p>
+                  )}
+                </form>
+              </div>
+
+              {/* 3. KARTA: LIVE CHAT (Zadokowany podgląd czatu na żywo) */}
+              <div className="bg-[#101724] border border-[#1c293c] rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col h-[320px]">
+                
+                {/* Nagłówek Czatu */}
+                <div className="flex items-center justify-between pb-3 border-b border-[#182334] shrink-0">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <h2 className="text-xs font-black text-white tracking-wider uppercase">
+                      LIVE CHAT
+                    </h2>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-400">
+                    <Video className="w-3.5 h-3.5 hover:text-white cursor-pointer" />
+                    <SettingsIcon className="w-3.5 h-3.5 hover:text-white cursor-pointer" />
+                  </div>
                 </div>
-                <p className="text-[11px] text-gray-500 mt-1.5">
-                  ⚠️ Nigdy nie pokazuj tego klucza na streamie! Każdy kto go posiada, może nadawać na Twoim kanale.
-                </p>
-              </div>
 
-              <div className="p-3.5 rounded-xl bg-[#0e131a] border border-[var(--border-subtle)] text-xs text-gray-300 space-y-1.5">
-                <p className="font-bold text-white flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-[var(--brand-primary)]" />
-                  Jak uruchomić stream w OBS Studio?
-                </p>
-                <ol className="list-decimal list-inside space-y-1 text-gray-400 text-[11px]">
-                  <li>Otwórz <b>OBS Studio</b> i wejdź w: <i>Ustawienia → Transmisja</i>.</li>
-                  <li>Wybierz <b>Usługa: Własna... (Custom...)</b>.</li>
-                  <li>W pole <b>Serwer</b> wklej: <code className="text-blue-400 font-mono">rtmp://localhost/live</code></li>
-                  <li>W pole <b>Klucz strumienia</b> wklej: <code className="text-blue-400 font-mono">{user?.username}</code> (lub wygenerowany klucz powyżej).</li>
-                  <li>Kliknij <b>Rozpocznij transmisję</b>. Twój kanał stanie się automatycznie <b>NA ŻYWO</b>!</li>
-                </ol>
+                {/* Strumień Wiadomości */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar py-2.5 space-y-2 text-xs">
+                  {chatMessages.map((msg) => (
+                    <div key={msg.id} className="flex items-start gap-1.5 leading-relaxed">
+                      {msg.badge && (
+                        <span className={`text-[9px] font-black uppercase px-1 py-0.2 rounded font-mono shrink-0 ${
+                          msg.isBroadcaster 
+                            ? 'bg-cyan-950 text-cyan-400 border border-cyan-800'
+                            : 'bg-[#182334] text-gray-400 border border-[#24354c]'
+                        }`}>
+                          {msg.badge}
+                        </span>
+                      )}
+                      <span className="font-bold shrink-0" style={{ color: msg.color }}>
+                        {msg.username}:
+                      </span>
+                      <span className="text-gray-200 break-words">
+                        {msg.message}
+                      </span>
+                    </div>
+                  ))}
+                  <div ref={chatBottomRef} />
+                </div>
+
+                {/* Input do pisania na czacie */}
+                <form onSubmit={handleSendChat} className="pt-2 border-t border-[#182334] flex gap-1.5 shrink-0">
+                  <input
+                    type="text"
+                    placeholder="Napisz na czacie jako streamer..."
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    className="flex-1 bg-[#090d15] text-xs text-white px-3 py-1.5 rounded-xl border border-[#1c283a] focus:border-cyan-400 outline-none placeholder-gray-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!chatInput.trim()}
+                    className="p-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-30 text-black font-extrabold transition-colors shadow-sm"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </form>
+
               </div>
 
             </div>
 
           </div>
-
-          {/* Prawa kolumna */}
-          <div className="space-y-6">
-            
-            {/* Monitor Podglądu */}
-            <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl p-5 shadow-xl">
-              <h3 className="text-sm font-extrabold text-white mb-3 flex items-center justify-between">
-                <span>Podgląd Transmisji</span>
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isLive ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400'}`}>
-                  {isLive ? 'ONLINE' : 'OFFLINE'}
-                </span>
-              </h3>
-
-              <div className="aspect-video bg-black rounded-xl overflow-hidden relative flex items-center justify-center border border-[var(--border-subtle)]">
-                {isLive ? (
-                  <div className="text-center text-xs text-blue-400 font-bold">
-                    Transmisja aktywna
-                  </div>
-                ) : (
-                  <div className="text-center p-4">
-                    <Radio className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                    <p className="text-xs text-gray-400 font-semibold">Oczekiwanie na sygnał z OBS...</p>
-                    <p className="text-[10px] text-gray-500 mt-1">Uruchom nadawanie w programie streamingowym</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Szybkie Narzędzia Twórcy (bez subów!) */}
-            <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl p-5 shadow-xl space-y-2.5">
-              <h3 className="text-sm font-extrabold text-white mb-2">
-                Narzędzia Czatowe
-              </h3>
-              
-              <button 
-                onClick={() => setIsLive(!isLive)}
-                className="w-full text-left p-2.5 rounded-xl bg-[#141b24] hover:bg-[#1a2330] text-xs font-bold text-gray-200 flex items-center justify-between border border-[var(--border-subtle)] transition-colors"
-              >
-                <span>Symuluj status Live (Test)</span>
-                <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-red-500' : 'bg-gray-500'}`}></span>
-              </button>
-
-              <button className="w-full text-left p-2.5 rounded-xl bg-[#141b24] hover:bg-[#1a2330] text-xs font-bold text-gray-200 flex items-center justify-between border border-[var(--border-subtle)] transition-colors">
-                <span>Wyczyść wiadomości czatu</span>
-                <span className="text-[10px] text-gray-400">Mod</span>
-              </button>
-
-              <button className="w-full text-left p-2.5 rounded-xl bg-[#141b24] hover:bg-[#1a2330] text-xs font-bold text-gray-200 flex items-center justify-between border border-[var(--border-subtle)] transition-colors">
-                <span>Tryb tylko dla obserwujących</span>
-                <span className="text-[10px] text-blue-400">Followers-Only</span>
-              </button>
-            </div>
-
-          </div>
-
-        </div>
+        </main>
 
       </div>
+
     </div>
   );
 };
